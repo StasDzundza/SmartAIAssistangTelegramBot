@@ -1,0 +1,3 @@
+[submodule "chat-gpt-client-py"]
+	path = chat-gpt-client-py
+	url = git@github.com:StasDzundza/chat-gpt-client-py.git
