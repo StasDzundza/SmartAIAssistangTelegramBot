@@ -1,1 +1,2 @@
 python-telegram-bot >= 20.2
+cryptography >= 40.0.2

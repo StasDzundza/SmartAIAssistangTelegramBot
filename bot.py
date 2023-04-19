@@ -2,6 +2,7 @@ import logging
 import os
 import constants
 from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient
+from Database.user_db_service import UserDatabaseService
 from telegram import Update
 from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, CallbackContext, Defaults
 
@@ -16,6 +17,8 @@ logging.basicConfig(
 
 class ChatGPTBot:
     def __init__(self, token):
+        db_encryption_key = os.getenv(constants.TELEGRAM_BOT_DB_ENCRYPTION_KEY_ENV)
+        self._db_service = UserDatabaseService(db_encryption_key)
         self._application = ApplicationBuilder().token(token).build()
         self._configure_handlers()
 

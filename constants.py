@@ -1,7 +1,8 @@
 # environment variables
-TELEGRAM_BOT_TOKEN_ENV = "TELEGRAM_BOT_API_KEY"
+TELEGRAM_BOT_TOKEN_ENV = "TELEGRAM_BOT_TOKEN"
+TELEGRAM_BOT_DB_ENCRYPTION_KEY_ENV = "TELEGRAM_BOT_DB_ENCRYPTION_KEY"
 
-# telegram fields keys
+# telegram answer fields keys
 API_KEY_FIELD = "api_key"
 
 # predefinded messages
