@@ -7,7 +7,7 @@ class UserDatabaseService:
         self._init_database()
         self._fernet = Fernet(encryption_key)
 
-    def _init_database(self, db_name: str):
+    def _init_database(self):
         connection = sqlite3.connect(self._db_name)
         cursor = connection.cursor()
 
@@ -23,11 +23,11 @@ class UserDatabaseService:
         connection.commit()
         connection.close()
 
-    def get_api_key(self, user_id):
+    def get_api_key(self, user_id: int) -> str:
         connection = sqlite3.connect(self._db_name)
         cursor = connection.cursor()
 
-        cursor.execute("SELECT api_key FROM users WHERE user_id=?", (user_id))
+        cursor.execute(f"SELECT api_key FROM users WHERE user_id={user_id}")
         encrypted_api_key = cursor.fetchone()
 
         connection.close()
