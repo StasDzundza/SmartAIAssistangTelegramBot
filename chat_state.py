@@ -1,0 +1,9 @@
+from enum import Enum
+
+class ChatState(Enum):
+    MAIN = 1,
+    PROVIDING_API_KEY = 2,
+    HAVING_CONVERSATION_WITH_CHAT_GPT = 3,
+    PROVIDING_IMAGES_DESCRIPTION = 4,
+    PROVIDING_IMAGES_COUNT = 5
+    
