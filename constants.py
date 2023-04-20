@@ -23,4 +23,4 @@ HELP_BUTTON = [[KeyboardButton("Help")]]
 MAIN_BUTTONS = [
     [KeyboardButton("Start Chat")],
     [KeyboardButton("Generate Image")]
-] + SET_API_KEY_BUTTON + HELP_BUTTON
+] + SET_API_KEY_BUTTON

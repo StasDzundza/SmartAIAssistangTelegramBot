@@ -40,6 +40,7 @@ class ChatGPTBot:
         # Menu hendlers
         self._application.add_handler(MessageHandler(filters.Regex(r'^Set API Key$'), self._api_key_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Help$'), self._help_handler))
 
         # Message handlers
         self._application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self._message_handler))
@@ -67,8 +68,8 @@ class ChatGPTBot:
     async def _api_key_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"_api_key_handler called for User {update.effective_user.id}")
 
+        await update.message.reply_text("Please send me your OpenAI API key. Use Help menu button in order to get info about how to get it.")
         await self._show_menu(update, context, constants.CANCEL_BUTTON)
-        await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
         self._set_chat_state(ChatState.PROVIDING_API_KEY, context)
 
     async def _cancel_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -88,7 +89,7 @@ class ChatGPTBot:
     async def _message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         message = update.message.text
-        logger.info(f"User {user_id} message received: " + message)
+        logger.info(f"User's {user_id} message received: " + message)
 
         chat_state = self._get_chat_state(context)
         if chat_state == ChatState.MAIN:
@@ -109,6 +110,9 @@ class ChatGPTBot:
             pass
         elif chat_state == ChatState.PROVIDING_IMAGES_COUNT:
             pass
+
+    async def _help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text("Help currently is not available.")
 
     async def _show_menu(self, update: Update, context: CallbackContext, keyboard: list):
         # keyboard = [
@@ -131,6 +135,8 @@ class ChatGPTBot:
         # context.chat_data["keyboard_message"] = message
 
         logger.info(f"Showing keyboard to user {update.effective_user.id}")
+
+        keyboard += constants.HELP_BUTTON
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         await update.effective_message.reply_text("Here is the bot menu:", reply_markup=reply_markup)
 
