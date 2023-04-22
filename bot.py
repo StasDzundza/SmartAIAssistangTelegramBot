@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 import os
 import constants
 from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient
-from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData
+from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData, ImageSize
 from Database.user_db_service import UserDatabaseService
 from chat_state import ChatState
-from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup
+from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup, InputMediaPhoto
 from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, CallbackContext, Defaults
 
 class ChatGPTBot:
@@ -43,6 +43,8 @@ class ChatGPTBot:
         self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Help$'), self._help_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image$'), self._generate_image_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^(1|2|3|4)$'), self._image_count_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^(Small|Medium|Large)$'), self._image_size_handler))
 
         # Message handlers
         self._application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self._message_handler))
@@ -68,24 +70,24 @@ class ChatGPTBot:
             reply_message += f" {constants.API_KEY_REQUEST_MESSAGE}"
             keyboard = constants.SET_API_KEY_BUTTON
         await update.message.reply_text(reply_message)
-        await self._show_menu(update, context, keyboard)
+        await self._show_menu(update, keyboard)
 
     async def _api_key_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"_api_key_handler called for User {update.effective_user.id}")
 
         await update.message.reply_text("Please send me your OpenAI API key. Use Help menu button in order to get info about how to get it.")
-        await self._show_menu(update, context, constants.CANCEL_BUTTON)
+        await self._show_menu(update, constants.CANCEL_BUTTON)
         self._set_chat_state(ChatState.PROVIDING_API_KEY, context)
 
-    async def _cancel_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def _cancel_handler(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         logger.info(f"_cancel_handler called for User {user_id}")
 
         self._set_chat_state(ChatState.MAIN, context)
         if self._openai_api_key_provided(user_id, context):
-            await self._show_menu(update, context, constants.MAIN_BUTTONS)
+            await self._show_menu(update, constants.MAIN_BUTTONS)
         else:
-            await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
+            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
 
     async def _generate_image_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -93,12 +95,49 @@ class ChatGPTBot:
 
         if not self._openai_api_key_provided(user_id, context):
             await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
-            await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
+            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
         else:
-            self._set_chat_state(ChatState.PROVIDING_IMAGES_DESCRIPTION, context)
             await update.effective_message.reply_text(constants.IMAGE_DESCRIPTION_REQUEST_MESSAGE)
-            await self._show_menu(update, context, constants.CANCEL_BUTTON)
-    
+            await self._show_menu(update, constants.CANCEL_BUTTON)
+            self._set_chat_state(ChatState.PROVIDING_IMAGES_DESCRIPTION, context)
+
+    async def _image_count_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_image_count_handler called for User {user_id}")
+
+        if self._get_chat_state(context) == ChatState.SELECTING_IMAGES_COUNT:
+            count = int(update.effective_message.text)
+            context.chat_data[constants.IMAGES_COUNT_KEY] = count
+
+            await update.effective_message.reply_text(constants.IMAGE_SIZE_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON)
+            self._set_chat_state(ChatState.SELECTING_IMAGES_SIZE, context)
+        else:
+            await self._message_handler(update, context)
+
+    async def _image_size_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_image_size_handler called for User {user_id}")
+
+        if self._get_chat_state(context) == ChatState.SELECTING_IMAGES_SIZE:
+            size = update.effective_message.text
+            api_key = self._get_openai_api_key(user_id, context)
+            description, count = context.chat_data[constants.IMAGES_DESCRIPTION_KEY], context.chat_data[constants.IMAGES_COUNT_KEY]
+            images_data = ImageRequestData(description, count, ImageSize[size.upper()])
+
+            await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
+            dalle_client = DALLEClient(api_key)
+            image_urls = dalle_client.generate_images(images_data)
+            if image_urls:
+                input_media_photos = [InputMediaPhoto(url) for url in image_urls]
+                await context.bot.send_media_group(chat_id=update.effective_chat.id, media=input_media_photos)
+                await self._show_menu(update, constants.MAIN_BUTTONS)
+                self._set_chat_state(ChatState.MAIN, context)
+            else:
+                await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
+        else:
+            await self._message_handler(update, context)
+
     async def _message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         message = update.message.text
@@ -108,60 +147,32 @@ class ChatGPTBot:
         if chat_state == ChatState.MAIN:
             if self._openai_api_key_provided(user_id, context):
                 await update.message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
-                await self._show_menu(update, context, constants.MAIN_BUTTONS)
+                await self._show_menu(update, constants.MAIN_BUTTONS)
             else:
                 await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
-                await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
+                await self._show_menu(update, constants.SET_API_KEY_BUTTON)
     
         elif chat_state == ChatState.PROVIDING_API_KEY:
             api_key = message
             context.user_data[constants.API_KEY_FIELD] = api_key
             self._db_service.store_api_key(user_id, api_key)
             await update.message.reply_text(constants.API_KEY_SET_SUCCESSFULLY_MESSAGE)
-            await self._show_menu(update, context, constants.MAIN_BUTTONS)
+            await self._show_menu(update, constants.MAIN_BUTTONS)
             self._set_chat_state(ChatState.MAIN, context)
 
         elif chat_state == ChatState.PROVIDING_IMAGES_DESCRIPTION:
-            description = message
-            api_key = self._get_openai_api_key(user_id, context)
-            images_data = ImageRequestData(description)
+            context.chat_data[constants.IMAGES_DESCRIPTION_KEY] = message
+            await update.effective_message.reply_text(constants.IMAGE_COUNT_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.IMAGE_COUNT_BUTTONS + constants.CANCEL_BUTTON)
+            self._set_chat_state(ChatState.SELECTING_IMAGES_COUNT, context)
 
-            await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
-            dalle_client = DALLEClient(api_key)
-            images = dalle_client.generate_images(images_data)
-            if images:
-                await update.effective_message.reply_photo(images[0])
-                await self._show_menu(update, context, constants.MAIN_BUTTONS)
-                self._set_chat_state(ChatState.MAIN, context)
-            else:
-                await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
-
-        elif chat_state == ChatState.PROVIDING_IMAGES_COUNT:
-            pass
+        else:
+            await update.effective_message.reply_text("Empty")
 
     async def _help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Help currently is not available.")
 
-    async def _show_menu(self, update: Update, context: CallbackContext, keyboard: list):
-        # keyboard = [
-        #     [InlineKeyboardButton("Provide API Key", callback_data="provide_api_key")],
-        # ]
-
-        # if self._openai_api_key_provided(user_id, context):
-        #     keyboard.extend([
-        #         [InlineKeyboardButton("Begin Chat", callback_data="begin_chat"),
-        #             InlineKeyboardButton("End Chat", callback_data="end_chat")],
-        #         [InlineKeyboardButton("Generate Image", callback_data="generate_image")],
-        #     ])
-
-        # reply_markup = InlineKeyboardMarkup(keyboard)
-
-        # if "keyboard_message" in context.chat_data:
-        #     await context.chat_data["keyboard_message"].delete()
-
-        # message = await update.effective_message.reply_text("Choose an option:", reply_markup=reply_markup)
-        # context.chat_data["keyboard_message"] = message
-
+    async def _show_menu(self, update: Update, keyboard: list):
         logger.info(f"Showing keyboard to user {update.effective_user.id}")
 
         reply_markup = ReplyKeyboardMarkup(keyboard + constants.HELP_BUTTON, resize_keyboard=True)
