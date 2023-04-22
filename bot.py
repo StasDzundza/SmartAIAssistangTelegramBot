@@ -49,6 +49,9 @@ class ChatGPTBot:
         # Message handlers
         self._application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self._message_handler))
 
+        # Error handlers
+        self._application.add_error_handler(self._error_handler)
+
     def _openai_api_key_provided(self, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
         if constants.API_KEY_FIELD not in context.user_data:
             api_key = self._db_service.get_api_key(user_id)
@@ -173,6 +176,12 @@ class ChatGPTBot:
 
     async def _help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Help currently is not available.")
+
+    async def _error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.error("Update '%s' caused error '%s'", update, context.error)
+
+        if update and update.effective_message:
+            update.effective_message.reply_text("An error occurred. Please try again.")
 
     async def _show_menu(self, update: Update, keyboard: list):
         logger.info(f"Showing keyboard to user {update.effective_user.id}")
