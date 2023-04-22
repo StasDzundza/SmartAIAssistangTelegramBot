@@ -2,6 +2,7 @@ import logging
 import os
 import constants
 from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient
+from OpenAIClients.DALLE.dalle_client import DALLEClient
 from Database.user_db_service import UserDatabaseService
 from chat_state import ChatState
 from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup
@@ -41,6 +42,7 @@ class ChatGPTBot:
         self._application.add_handler(MessageHandler(filters.Regex(r'^Set API Key$'), self._api_key_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Help$'), self._help_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image$'), self._generate_image_handler))
 
         # Message handlers
         self._application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self._message_handler))
@@ -53,6 +55,9 @@ class ChatGPTBot:
             else:
                 return False
         return True
+
+    def _get_openai_api_key(self, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> str | None:
+        return context.user_data[constants.API_KEY_FIELD].strip() if self._openai_api_key_provided(user_id, context) else None
 
     async def _start_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"_start_handler called for User {update.effective_user.id}")
@@ -76,16 +81,22 @@ class ChatGPTBot:
         user_id = update.effective_user.id
         logger.info(f"_cancel_handler called for User {user_id}")
 
-        chat_state = self._get_chat_state(context)
-        if chat_state == ChatState.PROVIDING_API_KEY:
-            self._set_chat_state(ChatState.MAIN, context)
-            if self._openai_api_key_provided(user_id, context):
-                await self._show_menu(update, context, constants.MAIN_BUTTONS)
-            else:
-                await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
+        self._set_chat_state(ChatState.MAIN, context)
+        if self._openai_api_key_provided(user_id, context):
+            await self._show_menu(update, context, constants.MAIN_BUTTONS)
         else:
-            pass
+            await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
 
+    async def _generate_image_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_generate_image_handler called for User {user_id}")
+
+        if not self._openai_api_key_provided(user_id, context):
+            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
+        else:
+            await update.effective_message.reply_text(constants.IMAGE_DESCRIPTION_REQUEST_MESSAGE)
+            self._set_chat_state(ChatState.PROVIDING_IMAGES_DESCRIPTION, context)
+    
     async def _message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         message = update.message.text
@@ -99,15 +110,28 @@ class ChatGPTBot:
             else:
                 await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
                 await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
+    
         elif chat_state == ChatState.PROVIDING_API_KEY:
             api_key = message
             context.user_data[constants.API_KEY_FIELD] = api_key
             self._db_service.store_api_key(user_id, api_key)
-            context.chat_data[constants.CHAT_STATE_FIELD] = ChatState.MAIN
             await update.message.reply_text(constants.API_KEY_SET_SUCCESSFULLY_MESSAGE)
             await self._show_menu(update, context, constants.MAIN_BUTTONS)
+            self._set_chat_state(ChatState.MAIN, context)
+
         elif chat_state == ChatState.PROVIDING_IMAGES_DESCRIPTION:
-            pass
+            description = message
+            api_key = self._get_openai_api_key(user_id, context)
+            dalle_client = DALLEClient(api_key)
+
+            await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
+            images = dalle_client.generate_images(description)
+            if images:
+                await update.effective_message.reply_photo(images[0])
+            else:
+                await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
+            self._set_chat_state(ChatState.MAIN, context)
+
         elif chat_state == ChatState.PROVIDING_IMAGES_COUNT:
             pass
 
