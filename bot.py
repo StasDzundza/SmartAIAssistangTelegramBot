@@ -1,13 +1,4 @@
 import logging
-import os
-import constants
-from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient
-from OpenAIClients.DALLE.dalle_client import DALLEClient
-from Database.user_db_service import UserDatabaseService
-from chat_state import ChatState
-from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup
-from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, CallbackContext, Defaults
-
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -17,6 +8,15 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+import os
+import constants
+from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient
+from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData
+from Database.user_db_service import UserDatabaseService
+from chat_state import ChatState
+from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup
+from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, CallbackContext, Defaults
 
 class ChatGPTBot:
     def __init__(self, token):
@@ -93,9 +93,11 @@ class ChatGPTBot:
 
         if not self._openai_api_key_provided(user_id, context):
             await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
+            await self._show_menu(update, context, constants.SET_API_KEY_BUTTON)
         else:
-            await update.effective_message.reply_text(constants.IMAGE_DESCRIPTION_REQUEST_MESSAGE)
             self._set_chat_state(ChatState.PROVIDING_IMAGES_DESCRIPTION, context)
+            await update.effective_message.reply_text(constants.IMAGE_DESCRIPTION_REQUEST_MESSAGE)
+            await self._show_menu(update, context, constants.CANCEL_BUTTON)
     
     async def _message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -122,15 +124,17 @@ class ChatGPTBot:
         elif chat_state == ChatState.PROVIDING_IMAGES_DESCRIPTION:
             description = message
             api_key = self._get_openai_api_key(user_id, context)
-            dalle_client = DALLEClient(api_key)
+            images_data = ImageRequestData(description)
 
             await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
-            images = dalle_client.generate_images(description)
+            dalle_client = DALLEClient(api_key)
+            images = dalle_client.generate_images(images_data)
             if images:
                 await update.effective_message.reply_photo(images[0])
+                await self._show_menu(update, context, constants.MAIN_BUTTONS)
+                self._set_chat_state(ChatState.MAIN, context)
             else:
                 await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
-            self._set_chat_state(ChatState.MAIN, context)
 
         elif chat_state == ChatState.PROVIDING_IMAGES_COUNT:
             pass
@@ -160,8 +164,7 @@ class ChatGPTBot:
 
         logger.info(f"Showing keyboard to user {update.effective_user.id}")
 
-        keyboard += constants.HELP_BUTTON
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        reply_markup = ReplyKeyboardMarkup(keyboard + constants.HELP_BUTTON, resize_keyboard=True)
         await update.effective_message.reply_text("Here is the bot menu:", reply_markup=reply_markup)
 
     async def _hide_menu(self, update: Update):
