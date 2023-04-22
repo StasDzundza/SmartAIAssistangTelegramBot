@@ -16,7 +16,7 @@ from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData, Imag
 from Database.user_db_service import UserDatabaseService
 from chat_state import ChatState
 from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup, InputMediaPhoto
-from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, CallbackContext, Defaults
+from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler
 
 class ChatGPTBot:
     def __init__(self, token):
@@ -79,7 +79,7 @@ class ChatGPTBot:
         await self._show_menu(update, constants.CANCEL_BUTTON)
         self._set_chat_state(ChatState.PROVIDING_API_KEY, context)
 
-    async def _cancel_handler(self, update: Update, context: CallbackContext):
+    async def _cancel_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         logger.info(f"_cancel_handler called for User {user_id}")
 
@@ -122,11 +122,12 @@ class ChatGPTBot:
         if self._get_chat_state(context) == ChatState.SELECTING_IMAGES_SIZE:
             size = update.effective_message.text
             api_key = self._get_openai_api_key(user_id, context)
+            dalle_client = DALLEClient(api_key)
             description, count = context.chat_data[constants.IMAGES_DESCRIPTION_KEY], context.chat_data[constants.IMAGES_COUNT_KEY]
             images_data = ImageRequestData(description, count, ImageSize[size.upper()])
 
             await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
-            dalle_client = DALLEClient(api_key)
+            await self._hide_menu(update)
             image_urls = dalle_client.generate_images(images_data)
             if image_urls:
                 input_media_photos = [InputMediaPhoto(url) for url in image_urls]
@@ -135,6 +136,7 @@ class ChatGPTBot:
                 self._set_chat_state(ChatState.MAIN, context)
             else:
                 await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
+                await self._show_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON)
         else:
             await self._message_handler(update, context)
 
