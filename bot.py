@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 import os
 import constants
-from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient
+from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient, TextDavinciClient
 from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData, ImageSize
 from Database.user_db_service import UserDatabaseService
 from chat_state import ChatState
@@ -42,6 +42,8 @@ class ChatGPTBot:
         self._application.add_handler(MessageHandler(filters.Regex(r'^Set API Key$'), self._api_key_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Help$'), self._help_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Start Chat With Assistant$'), self._start_chat_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^End Chat$'), self._end_chat_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image$'), self._generate_image_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^(1|2|3|4)$'), self._image_count_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^(Small|Medium|Large)$'), self._image_size_handler))
@@ -91,6 +93,28 @@ class ChatGPTBot:
             await self._show_menu(update, constants.MAIN_BUTTONS)
         else:
             await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+
+    async def _start_chat_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_start_chat_handler called for User {user_id}")
+
+        if not self._openai_api_key_provided(user_id, context):
+            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+        else:
+            await update.effective_message.reply_text(constants.ASSISTANT_ROLE_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.ASSISTANT_ROLES_BUTTONS + constants.CANCEL_BUTTON)
+            self._set_chat_state(ChatState.SELECTING_ASSISTANT_ROLE, context)
+
+    async def _end_chat_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.info(f"_end_chat_handler called for User {update.effective_user.id}")
+
+        if self._get_chat_state(context) == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT:
+            await update.effective_message.reply_text(constants.CHAT_ENDED_MESSAGE)
+            await self._show_menu(update, constants.MAIN_BUTTONS)
+            self._set_chat_state(ChatState.MAIN, context)
+        else:
+            await self._message_handler(update, context)
 
     async def _generate_image_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -151,12 +175,17 @@ class ChatGPTBot:
         chat_state = self._get_chat_state(context)
         if chat_state == ChatState.MAIN:
             if self._openai_api_key_provided(user_id, context):
-                await update.message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
+                await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+                await self._hide_menu(update)
+                api_key = self._get_openai_api_key(user_id, context)
+                text_davinci_client = TextDavinciClient(api_key)
+                answer = text_davinci_client.ask_question(message)
+                await update.effective_message.reply_text(answer)
                 await self._show_menu(update, constants.MAIN_BUTTONS)
             else:
                 await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
                 await self._show_menu(update, constants.SET_API_KEY_BUTTON)
-    
+
         elif chat_state == ChatState.PROVIDING_API_KEY:
             api_key = message
             context.user_data[constants.API_KEY_FIELD] = api_key
@@ -171,8 +200,11 @@ class ChatGPTBot:
             await self._show_menu(update, constants.IMAGE_COUNT_BUTTONS + constants.CANCEL_BUTTON)
             self._set_chat_state(ChatState.SELECTING_IMAGES_COUNT, context)
 
+        elif chat_state == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT:
+            pass
+
         else:
-            await update.effective_message.reply_text("Empty")
+            await update.effective_message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
 
     async def _help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Help currently is not available.")
@@ -181,7 +213,7 @@ class ChatGPTBot:
         logger.error("Update '%s' caused error '%s'", update, context.error)
 
         if update and update.effective_message:
-            update.effective_message.reply_text("An error occurred. Please try again.")
+            await update.effective_message.reply_text(constants.TRY_AGAIN_MESSAGE)
 
     async def _show_menu(self, update: Update, keyboard: list):
         logger.info(f"Showing keyboard to user {update.effective_user.id}")
