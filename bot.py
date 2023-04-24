@@ -39,6 +39,9 @@ class ChatGPTBot:
         # Command handlers
         self._application.add_handler(CommandHandler("start", self._start_handler))
 
+        # Media handlers
+        self._application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.VIDEO | filters.VIDEO_NOTE, self._media_message_handler))
+
         # Menu hendlers
         self._application.add_handler(MessageHandler(filters.Regex(r'^Set API Key$'), self._api_key_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
@@ -49,6 +52,7 @@ class ChatGPTBot:
         self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image$'), self._generate_image_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^(1|2|3|4)$'), self._image_count_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^(Small|Medium|Large)$'), self._image_size_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Transcript Media$'), self._transcript_media_handler))
 
         # Message handlers
         self._application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self._message_handler))
@@ -184,6 +188,58 @@ class ChatGPTBot:
         else:
             await self._message_handler(update, context)
 
+    async def _transcript_media_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_transcript_media_handler called for User {user_id}") 
+
+        if not self._openai_api_key_provided(user_id, context):
+            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+        else:
+            await update.effective_message.reply_text(constants.MEDIA_FILE_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.CANCEL_BUTTON)
+            self._set_chat_state(ChatState.PROVIDING_MEDIA_FILE, context)
+
+    async def _media_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_handle_audio_video_message called for User {user_id}")
+
+        if not self._openai_api_key_provided(user_id, context):
+            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+        elif self._get_chat_state(context) == ChatState.PROVIDING_MEDIA_FILE:
+            # Check if the message contains a voice message, audio, or video file
+            if update.effective_message.voice:
+                file_id = update.message.voice.file_id
+                extension = 'ogg'
+            elif update.effective_message.audio:
+                file_id = update.message.audio.file_id
+                extension = 'mp3'
+            elif update.effective_message.video:
+                file_id = update.message.video.file_id
+                extension = 'mp4'
+            elif update.effective_message.video_note:
+                file_id = update.message.video_note.file_id
+                extension = 'mp4'
+            else:
+                await update.effective_message.reply_text(constants.MEDIA_FILE_REQUEST_MESSAGE)
+                return
+
+            # Download the file
+            file = await context.bot.get_file(file_id)
+            media_filename = f"user_media_{user_id}.{extension}"
+            await file.download_to_drive(media_filename)
+            api_key = self._get_openai_api_key(user_id, context)
+            await update.effective_message.reply_text(constants.TRANSCRIPTION_IN_PROGRESS_MESSAGE)
+            transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
+            await update.effective_message.reply_text(transcription)
+            self._show_menu(update, constants.MAIN_BUTTONS)
+
+            # Remove temporary files
+            os.remove(media_filename)
+        else:
+            await update.effective_message.reply_text(constants.TRANSCRIPT_MEDIA_HELP)
+
     async def _message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         message = update.message.text
@@ -229,6 +285,8 @@ class ChatGPTBot:
             await update.effective_message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
 
     async def _help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.info(f"_help_handler called for User {update.effective_user.id}")
+
         await update.message.reply_text(constants.HELP_MESSAGE, parse_mode="HTML")
 
     async def _error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

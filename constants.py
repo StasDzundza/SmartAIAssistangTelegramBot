@@ -28,6 +28,10 @@ IMAGE_COUNT_REQUEST_MESSAGE = "How much images do you want to generate?"
 IMAGE_SIZE_REQUEST_MESSAGE = "Please select images size."
 IMAGE_GENERATION_IN_PROGRESS_MESSAGE = "Image is generating at the moment. Please wait..."
 IMAGE_SIZE_FORMAT_IS_INCORRECT_MESSAGE = "Entered image size format is incorrect."
+# Media file transcription
+TRANSCRIPT_MEDIA_HELP = "If you want transcript some media file or voice message than use `Transcript Media` menu button and provide bot with voice message, audio or video file."
+MEDIA_FILE_REQUEST_MESSAGE = "Please provide media file which you want to transcript. It can be voice message, audio or video file.\nSupported formats: ['m4a', 'mp3', 'webm', 'mp4', 'mpga', 'wav', 'mpeg']"
+TRANSCRIPTION_IN_PROGRESS_MESSAGE = "Transcription in progress. Please wait..."
 # Errors
 SOMETHING_WENT_WRONG_MESSAGE = "Something went wrong."
 TRY_AGAIN_MESSAGE = "An error occurred. Please try again."
@@ -41,7 +45,7 @@ If you already have an API key that provide bot with it using `Set API Key` menu
     - Audio transcription
 3. You can communicate with your assistant in 2 ways. First way is very simple - just write some message to the bot and he will answer. But if you want bot to remember message history and have longer full-fledged conversation than use `Start Chat With Assistant` button and follow instructions.
 4. Use `Generate Image` menu button in order to generate image or some images by description. Feel free to describe as much details of desired image as you want.
-5. If you want transcript some audio file or voice message than use `Transcript Audio` menu button and provide bot with audio file.
+5. If you want transcript some media file or voice message than use `Transcript Media` menu button and provide bot with voice message, audio or video file.
 '''
 
 # Keyboards
@@ -52,7 +56,7 @@ HELP_BUTTON = [[KeyboardButton("Help")]]
 MAIN_BUTTONS = [
     [KeyboardButton("Start Chat With Assistant")],
     [KeyboardButton("Generate Image")],
-    [KeyboardButton("Transcript Audio")]
+    [KeyboardButton("Transcript Media")]
 ] + SET_API_KEY_BUTTON
 IMAGE_COUNT_BUTTONS = [
     [KeyboardButton("1"), KeyboardButton("2")],
