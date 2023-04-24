@@ -43,6 +43,7 @@ class ChatGPTBot:
         self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Help$'), self._help_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Start Chat With Assistant$'), self._start_chat_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^\w* (👨‍⚕️|👨‍🍳|🤖|🏆|👨‍🔬|😂)$'), self._assistant_role_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^End Chat$'), self._end_chat_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image$'), self._generate_image_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^(1|2|3|4)$'), self._image_count_handler))
@@ -106,10 +107,26 @@ class ChatGPTBot:
             await self._show_menu(update, constants.ASSISTANT_ROLES_BUTTONS + constants.CANCEL_BUTTON)
             self._set_chat_state(ChatState.SELECTING_ASSISTANT_ROLE, context)
 
+    async def _assistant_role_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        logger.info(f"_assistant_role_handler called for User {user_id}")
+
+        if not self._openai_api_key_provided(user_id, context):
+            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
+            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+        else:
+            api_key = self._get_openai_api_key(user_id, context)
+            chat_gpt_client = ChatGPTClient(api_key, update.effective_message.text)
+            context.chat_data[constants.CHAT_CLIENT] = chat_gpt_client
+            await update.effective_message.reply_text(constants.CHAT_STARTED_MESSAGE)
+            await self._show_menu(update, constants.END_CHAT_BUTTON)
+            self._set_chat_state(ChatState.HAVING_CONVERSATION_WITH_ASSISTANT, context)
+
     async def _end_chat_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"_end_chat_handler called for User {update.effective_user.id}")
 
         if self._get_chat_state(context) == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT:
+            del context.chat_data[constants.CHAT_CLIENT]
             await update.effective_message.reply_text(constants.CHAT_ENDED_MESSAGE)
             await self._show_menu(update, constants.MAIN_BUTTONS)
             self._set_chat_state(ChatState.MAIN, context)
@@ -200,14 +217,20 @@ class ChatGPTBot:
             await self._show_menu(update, constants.IMAGE_COUNT_BUTTONS + constants.CANCEL_BUTTON)
             self._set_chat_state(ChatState.SELECTING_IMAGES_COUNT, context)
 
+        elif chat_state == ChatState.SELECTING_ASSISTANT_ROLE:
+            await self._assistant_role_handler(update, context)
+
         elif chat_state == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT:
-            pass
+            chat_gpt_client = context.chat_data[constants.CHAT_CLIENT]
+            await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+            response = chat_gpt_client.ask_chat(update.effective_message.text)
+            await update.effective_message.reply_text(response)
 
         else:
             await update.effective_message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
 
     async def _help_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text("Help currently is not available.")
+        await update.message.reply_text(constants.HELP_MESSAGE, parse_mode="HTML")
 
     async def _error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error("Update '%s' caused error '%s'", update, context.error)
