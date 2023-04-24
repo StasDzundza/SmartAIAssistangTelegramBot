@@ -13,6 +13,7 @@ import os
 import constants
 from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient, TextDavinciClient
 from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData, ImageSize
+from OpenAIClients.WhisperClient.whisper_client import WhisperClient
 from Database.user_db_service import UserDatabaseService
 from chat_state import ChatState
 from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup, InputMediaPhoto
@@ -166,13 +167,12 @@ class ChatGPTBot:
         if self._get_chat_state(context) == ChatState.SELECTING_IMAGES_SIZE:
             size = update.effective_message.text
             api_key = self._get_openai_api_key(user_id, context)
-            dalle_client = DALLEClient(api_key)
             description, count = context.chat_data[constants.IMAGES_DESCRIPTION_KEY], context.chat_data[constants.IMAGES_COUNT_KEY]
             images_data = ImageRequestData(description, count, ImageSize[size.upper()])
 
             await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
             await self._hide_menu(update)
-            image_urls = dalle_client.generate_images(images_data)
+            image_urls = DALLEClient.generate_images(api_key, images_data)
             if image_urls:
                 input_media_photos = [InputMediaPhoto(url) for url in image_urls]
                 await context.bot.send_media_group(chat_id=update.effective_chat.id, media=input_media_photos)
@@ -195,8 +195,7 @@ class ChatGPTBot:
                 await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
                 await self._hide_menu(update)
                 api_key = self._get_openai_api_key(user_id, context)
-                text_davinci_client = TextDavinciClient(api_key)
-                answer = text_davinci_client.ask_question(message)
+                answer = TextDavinciClient.ask_question(api_key, message)
                 await update.effective_message.reply_text(answer)
                 await self._show_menu(update, constants.MAIN_BUTTONS)
             else:
@@ -242,7 +241,7 @@ class ChatGPTBot:
         logger.info(f"Showing keyboard to user {update.effective_user.id}")
 
         reply_markup = ReplyKeyboardMarkup(keyboard + constants.HELP_BUTTON, resize_keyboard=True)
-        await update.effective_message.reply_text("Here is the bot menu:", reply_markup=reply_markup)
+        await update.effective_message.reply_text("Bot menu has been updated.", reply_markup=reply_markup)
 
     async def _hide_menu(self, update: Update):
         reply_markup = ReplyKeyboardRemove()
