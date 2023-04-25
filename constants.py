@@ -44,23 +44,24 @@ If you already have an API key that provide bot with it using `Set API Key` menu
     - Image generation by description
     - Audio transcription
 3. You can communicate with your assistant in 2 ways. First way is very simple - just write some message to the bot and he will answer. But if you want bot to remember message history and have longer full-fledged conversation than use `Start Chat With Assistant` button and follow instructions.
+Worth noting that you are able to communicate with your assistant with the help of voice messages. Just send it to you assistant and he will reply (Note that communication via voice messages works a little longer then via text messages).
 4. Use `Generate Image` menu button in order to generate image or some images by description. Feel free to describe as much details of desired image as you want.
 5. If you want transcript some media file or voice message than use `Transcript Media` menu button and provide bot with voice message, audio or video file.
 '''
 
 # Keyboards
-SET_API_KEY_BUTTON = [[KeyboardButton("Set API Key")]]
-CANCEL_BUTTON = [[KeyboardButton("Cancel")]]
-END_CHAT_BUTTON = [[KeyboardButton("End Chat")]]
-HELP_BUTTON = [[KeyboardButton("Help")]]
+SET_API_KEY_BUTTON = [[KeyboardButton("Set API Key 🔑")]]
+CANCEL_BUTTON = [[KeyboardButton("Cancel ❌")]]
+END_CHAT_BUTTON = [[KeyboardButton("End Chat ❌")]]
+HELP_BUTTON = [[KeyboardButton("Help ℹ️")]]
 MAIN_BUTTONS = [
-    [KeyboardButton("Start Chat With Assistant")],
-    [KeyboardButton("Generate Image")],
-    [KeyboardButton("Transcript Media")]
+    [KeyboardButton("Start Chat With Assistant 💬")],
+    [KeyboardButton("Generate Image 🖼️")],
+    [KeyboardButton("Transcript Media 🎧")]
 ] + SET_API_KEY_BUTTON
 IMAGE_COUNT_BUTTONS = [
-    [KeyboardButton("1"), KeyboardButton("2")],
-    [KeyboardButton("3"), KeyboardButton("4")]
+    [KeyboardButton("1️⃣"), KeyboardButton("2️⃣")],
+    [KeyboardButton("3️⃣"), KeyboardButton("4️⃣")]
 ]
 IMAGE_SIZE_BUTTONS = [
     [KeyboardButton("Small")],

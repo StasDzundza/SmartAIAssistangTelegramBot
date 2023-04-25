@@ -43,16 +43,16 @@ class ChatGPTBot:
         self._application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.VIDEO | filters.VIDEO_NOTE, self._media_message_handler))
 
         # Menu hendlers
-        self._application.add_handler(MessageHandler(filters.Regex(r'^Set API Key$'), self._api_key_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel$'), self._cancel_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^Help$'), self._help_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^Start Chat With Assistant$'), self._start_chat_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Set API Key 🔑$'), self._api_key_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Cancel ❌$'), self._cancel_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Help ℹ️$'), self._help_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Start Chat With Assistant 💬$'), self._start_chat_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^\w* (👨‍⚕️|👨‍🍳|🤖|🏆|👨‍🔬|😂)$'), self._assistant_role_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^End Chat$'), self._end_chat_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image$'), self._generate_image_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^(1|2|3|4)$'), self._image_count_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^End Chat ❌$'), self._end_chat_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Generate Image 🖼️$'), self._generate_image_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^(1️⃣|2️⃣|3️⃣|4️⃣)$'), self._image_count_handler))
         self._application.add_handler(MessageHandler(filters.Regex(r'^(Small|Medium|Large)$'), self._image_size_handler))
-        self._application.add_handler(MessageHandler(filters.Regex(r'^Transcript Media$'), self._transcript_media_handler))
+        self._application.add_handler(MessageHandler(filters.Regex(r'^Transcript Media 🎧$'), self._transcript_media_handler))
 
         # Message handlers
         self._application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self._message_handler))
@@ -155,7 +155,12 @@ class ChatGPTBot:
         logger.info(f"_image_count_handler called for User {user_id}")
 
         if self._get_chat_state(context) == ChatState.SELECTING_IMAGES_COUNT:
-            count = int(update.effective_message.text)
+            count = 1
+            for button in constants.IMAGE_COUNT_BUTTONS[0] + constants.IMAGE_COUNT_BUTTONS[1]:
+                if update.effective_message.text == button.text:
+                    break
+                else:
+                    count += 1
             context.chat_data[constants.IMAGES_COUNT_KEY] = count
 
             await update.effective_message.reply_text(constants.IMAGE_SIZE_REQUEST_MESSAGE)
