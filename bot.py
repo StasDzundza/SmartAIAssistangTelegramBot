@@ -80,14 +80,12 @@ class ChatGPTBot:
         if not self._openai_api_key_provided(update.effective_user.id, context):
             reply_message += f" {constants.API_KEY_REQUEST_MESSAGE}"
             keyboard = constants.SET_API_KEY_BUTTON
-        await update.message.reply_text(reply_message)
-        await self._show_menu(update, keyboard)
+        await self._answer_and_update_menu(update, keyboard, reply_message)
 
     async def _api_key_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"_api_key_handler called for User {update.effective_user.id}")
 
-        await update.message.reply_text("Please send me your OpenAI API key. Use Help menu button in order to get info about how to get it.")
-        await self._show_menu(update, constants.CANCEL_BUTTON)
+        await self._answer_and_update_menu(update, constants.CANCEL_BUTTON, constants.PLEASE_SEND_API_KEY_MESSAGE)
         self._set_chat_state(ChatState.PROVIDING_API_KEY, context)
 
     async def _cancel_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -96,20 +94,18 @@ class ChatGPTBot:
 
         self._set_chat_state(ChatState.MAIN, context)
         if self._openai_api_key_provided(user_id, context):
-            await self._show_menu(update, constants.MAIN_BUTTONS)
+            await self._answer_and_update_menu(update, constants.MAIN_BUTTONS)
         else:
-            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+            await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON)
 
     async def _start_chat_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         logger.info(f"_start_chat_handler called for User {user_id}")
 
         if not self._openai_api_key_provided(user_id, context):
-            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+            await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON, constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
         else:
-            await update.effective_message.reply_text(constants.ASSISTANT_ROLE_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.ASSISTANT_ROLES_BUTTONS + constants.CANCEL_BUTTON)
+            await self._answer_and_update_menu(update, constants.ASSISTANT_ROLES_BUTTONS + constants.CANCEL_BUTTON, constants.ASSISTANT_ROLE_REQUEST_MESSAGE)
             self._set_chat_state(ChatState.SELECTING_ASSISTANT_ROLE, context)
 
     async def _assistant_role_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -117,14 +113,12 @@ class ChatGPTBot:
         logger.info(f"_assistant_role_handler called for User {user_id}")
 
         if not self._openai_api_key_provided(user_id, context):
-            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+            await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON, constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
         else:
             api_key = self._get_openai_api_key(user_id, context)
             chat_gpt_client = ChatGPTClient(api_key, update.effective_message.text)
             context.chat_data[constants.CHAT_CLIENT] = chat_gpt_client
-            await update.effective_message.reply_text(constants.CHAT_STARTED_MESSAGE)
-            await self._show_menu(update, constants.END_CHAT_BUTTON)
+            await self._answer_and_update_menu(update, constants.END_CHAT_BUTTON, constants.CHAT_STARTED_MESSAGE)
             self._set_chat_state(ChatState.HAVING_CONVERSATION_WITH_ASSISTANT, context)
 
     async def _end_chat_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -132,8 +126,7 @@ class ChatGPTBot:
 
         if self._get_chat_state(context) == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT:
             del context.chat_data[constants.CHAT_CLIENT]
-            await update.effective_message.reply_text(constants.CHAT_ENDED_MESSAGE)
-            await self._show_menu(update, constants.MAIN_BUTTONS)
+            await self._answer_and_update_menu(update, constants.MAIN_BUTTONS, constants.CHAT_ENDED_MESSAGE)
             self._set_chat_state(ChatState.MAIN, context)
         else:
             await self._message_handler(update, context)
@@ -143,11 +136,9 @@ class ChatGPTBot:
         logger.info(f"_generate_image_handler called for User {user_id}")
 
         if not self._openai_api_key_provided(user_id, context):
-            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+            await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON, constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
         else:
-            await update.effective_message.reply_text(constants.IMAGE_DESCRIPTION_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.CANCEL_BUTTON)
+            await self._answer_and_update_menu(update, constants.CANCEL_BUTTON, constants.IMAGE_DESCRIPTION_REQUEST_MESSAGE)
             self._set_chat_state(ChatState.PROVIDING_IMAGES_DESCRIPTION, context)
 
     async def _image_count_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -163,8 +154,7 @@ class ChatGPTBot:
                     count += 1
             context.chat_data[constants.IMAGES_COUNT_KEY] = count
 
-            await update.effective_message.reply_text(constants.IMAGE_SIZE_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON)
+            await self._answer_and_update_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON, constants.IMAGE_SIZE_REQUEST_MESSAGE)
             self._set_chat_state(ChatState.SELECTING_IMAGES_SIZE, context)
         else:
             await self._message_handler(update, context)
@@ -176,8 +166,8 @@ class ChatGPTBot:
         if self._get_chat_state(context) == ChatState.SELECTING_IMAGES_SIZE:
             size = update.effective_message.text
             api_key = self._get_openai_api_key(user_id, context)
-            description, count = context.chat_data[constants.IMAGES_DESCRIPTION_KEY], context.chat_data[constants.IMAGES_COUNT_KEY]
-            images_data = ImageRequestData(description, count, ImageSize[size.upper()])
+            description, count, size = context.chat_data[constants.IMAGES_DESCRIPTION_KEY], context.chat_data[constants.IMAGES_COUNT_KEY], ImageSize[size.upper()]
+            images_data = ImageRequestData(description, count, size)
 
             please_wait_message = await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
             await self._hide_menu(update)
@@ -185,12 +175,11 @@ class ChatGPTBot:
             if image_urls:
                 input_media_photos = [InputMediaPhoto(url) for url in image_urls]
                 await context.bot.send_media_group(chat_id=update.effective_chat.id, media=input_media_photos)
-                await self._show_menu(update, constants.MAIN_BUTTONS)
+                await self._answer_and_update_menu(update, constants.MAIN_BUTTONS, constants.HERE_ARE_YOUR_IMAGES_MESSAGE)
                 self._set_chat_state(ChatState.MAIN, context)
             else:
-                await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
-                await self._show_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON)
-            please_wait_message.delete()
+                await self._answer_and_update_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON, constants.SOMETHING_WENT_WRONG_MESSAGE)
+            await please_wait_message.delete()
         else:
             await self._message_handler(update, context)
 
@@ -199,11 +188,9 @@ class ChatGPTBot:
         logger.info(f"_transcript_media_handler called for User {user_id}") 
 
         if not self._openai_api_key_provided(user_id, context):
-            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+            await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON, constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
         else:
-            await update.effective_message.reply_text(constants.MEDIA_FILE_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.CANCEL_BUTTON)
+            await self._answer_and_update_menu(update, constants.CANCEL_BUTTON, constants.MEDIA_FILE_REQUEST_MESSAGE)
             self._set_chat_state(ChatState.PROVIDING_MEDIA_FILE, context)
 
     async def _media_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,8 +199,7 @@ class ChatGPTBot:
 
         chat_state = self._get_chat_state(context)
         if not self._openai_api_key_provided(user_id, context):
-            await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+            await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON, constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
         elif chat_state in [ChatState.PROVIDING_MEDIA_FILE, ChatState.MAIN, ChatState.HAVING_CONVERSATION_WITH_ASSISTANT]:
             # Check if the message contains a voice message, audio, or video file
             if update.effective_message.voice:
@@ -245,8 +231,7 @@ class ChatGPTBot:
 
             transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
             if chat_state == ChatState.PROVIDING_MEDIA_FILE:
-                await update.effective_message.reply_text(transcription)
-                await self._show_menu(update, constants.MAIN_BUTTONS)
+                await self._answer_and_update_menu(update, constants.MAIN_BUTTONS, transcription)
             elif chat_state == ChatState.MAIN and update.effective_message.voice:
                 answer = TextDavinciClient.ask_question(api_key, transcription)
                 await update.effective_message.reply_text(answer)
@@ -266,7 +251,7 @@ class ChatGPTBot:
     async def _message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         message = update.message.text
-        logger.info(f"User's {user_id} message received: " + message)
+        logger.info(f"_message_handler called for User {user_id}")
 
         chat_state = self._get_chat_state(context)
         if chat_state == ChatState.MAIN:
@@ -275,23 +260,20 @@ class ChatGPTBot:
                 api_key = self._get_openai_api_key(user_id, context)
                 answer = TextDavinciClient.ask_question(api_key, message)
                 await update.effective_message.reply_text(answer)
-                please_wait_message.delete()
+                await please_wait_message.delete()
             else:
-                await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
-                await self._show_menu(update, constants.SET_API_KEY_BUTTON)
+                await self._answer_and_update_menu(update, constants.SET_API_KEY_BUTTON, constants.API_KEY_REQUEST_MESSAGE)
 
         elif chat_state == ChatState.PROVIDING_API_KEY:
             api_key = message
             context.user_data[constants.API_KEY_FIELD] = api_key
             self._db_service.store_api_key(user_id, api_key)
-            await update.message.reply_text(constants.API_KEY_SET_SUCCESSFULLY_MESSAGE)
-            await self._show_menu(update, constants.MAIN_BUTTONS)
+            await self._answer_and_update_menu(update, constants.MAIN_BUTTONS, constants.API_KEY_SET_SUCCESSFULLY_MESSAGE)
             self._set_chat_state(ChatState.MAIN, context)
 
         elif chat_state == ChatState.PROVIDING_IMAGES_DESCRIPTION:
             context.chat_data[constants.IMAGES_DESCRIPTION_KEY] = message
-            await update.effective_message.reply_text(constants.IMAGE_COUNT_REQUEST_MESSAGE)
-            await self._show_menu(update, constants.IMAGE_COUNT_BUTTONS + constants.CANCEL_BUTTON)
+            await self._answer_and_update_menu(update, constants.IMAGE_COUNT_BUTTONS + constants.CANCEL_BUTTON, constants.IMAGE_COUNT_REQUEST_MESSAGE)
             self._set_chat_state(ChatState.SELECTING_IMAGES_COUNT, context)
 
         elif chat_state == ChatState.SELECTING_ASSISTANT_ROLE:
@@ -302,7 +284,7 @@ class ChatGPTBot:
             please_wait_message = await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
             response = chat_gpt_client.ask_chat(update.effective_message.text)
             await update.effective_message.reply_text(response)
-            please_wait_message.delete()
+            await please_wait_message.delete()
 
         else:
             await update.effective_message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
@@ -318,11 +300,12 @@ class ChatGPTBot:
         if update and update.effective_message:
             await update.effective_message.reply_text(constants.TRY_AGAIN_MESSAGE)
 
-    async def _show_menu(self, update: Update, keyboard: list):
-        logger.info(f"Showing keyboard to user {update.effective_user.id}")
+    async def _answer_and_update_menu(self, update: Update, keyboard: list, message: str = ""):
+        logger.info(f"Answering and updating menu for User {update.effective_user.id}")
 
+        reply_text = message if len(message) > 0 else "Bot menu has been updated."
         reply_markup = ReplyKeyboardMarkup(keyboard + constants.HELP_BUTTON, resize_keyboard=True)
-        await update.effective_message.reply_text("Bot menu has been updated.", reply_markup=reply_markup)
+        await update.effective_message.reply_text(reply_text, reply_markup=reply_markup)
 
     async def _hide_menu(self, update: Update):
         reply_markup = ReplyKeyboardRemove()

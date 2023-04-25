@@ -15,6 +15,7 @@ CHAT_CLIENT = "chat_client"
 BOT_MENU_HELP_MESSAGE = "For more details see Help section."
 WELCOME_USER_MESSAGE = "Welcome to the ChatGPT Telegram bot! Ask me something or go to menu in order to use extended list of features. " + BOT_MENU_HELP_MESSAGE
 # API Key
+PLEASE_SEND_API_KEY_MESSAGE = "Please send me your OpenAI API key. Use Help menu button in order to get info about how to get it."
 API_KEY_REQUEST_MESSAGE = "Please provide me with your OpenAI API key via bot menu in order to use bot functionality."
 API_KEY_SET_SUCCESSFULLY_MESSAGE = "API key set successfully! Now you can use bot functionality."
 # Conversation with Chat GPT
@@ -28,6 +29,7 @@ IMAGE_COUNT_REQUEST_MESSAGE = "How much images do you want to generate?"
 IMAGE_SIZE_REQUEST_MESSAGE = "Please select images size."
 IMAGE_GENERATION_IN_PROGRESS_MESSAGE = "Image is generating at the moment. Please wait..."
 IMAGE_SIZE_FORMAT_IS_INCORRECT_MESSAGE = "Entered image size format is incorrect."
+HERE_ARE_YOUR_IMAGES_MESSAGE = "Here are your images 😊"
 # Media file transcription
 TRANSCRIPT_MEDIA_HELP = "If you want transcript some media file or voice message than use `Transcript Media` menu button and provide bot with voice message, audio or video file."
 MEDIA_FILE_REQUEST_MESSAGE = "Please provide media file which you want to transcript. It can be voice message, audio or video file.\nSupported formats: ['m4a', 'mp3', 'webm', 'mp4', 'mpga', 'wav', 'mpeg']"
