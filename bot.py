@@ -204,10 +204,11 @@ class ChatGPTBot:
         user_id = update.effective_user.id
         logger.info(f"_handle_audio_video_message called for User {user_id}")
 
+        chat_state = self._get_chat_state(context)
         if not self._openai_api_key_provided(user_id, context):
             await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE + constants.API_KEY_REQUEST_MESSAGE)
             await self._show_menu(update, constants.SET_API_KEY_BUTTON)
-        elif self._get_chat_state(context) == ChatState.PROVIDING_MEDIA_FILE:
+        elif chat_state in [ChatState.PROVIDING_MEDIA_FILE, ChatState.MAIN, ChatState.HAVING_CONVERSATION_WITH_ASSISTANT]:
             # Check if the message contains a voice message, audio, or video file
             if update.effective_message.voice:
                 file_id = update.message.voice.file_id
@@ -230,13 +231,29 @@ class ChatGPTBot:
             media_filename = f"user_media_{user_id}.{extension}"
             await file.download_to_drive(media_filename)
             api_key = self._get_openai_api_key(user_id, context)
-            await update.effective_message.reply_text(constants.TRANSCRIPTION_IN_PROGRESS_MESSAGE)
-            transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
-            await update.effective_message.reply_text(transcription)
-            self._show_menu(update, constants.MAIN_BUTTONS)
+
+            if chat_state == ChatState.PROVIDING_MEDIA_FILE:
+                await update.effective_message.reply_text(constants.TRANSCRIPTION_IN_PROGRESS_MESSAGE)
+                transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
+                await update.effective_message.reply_text(transcription)
+                self._show_menu(update, constants.MAIN_BUTTONS)
+
+            elif chat_state == ChatState.MAIN and update.effective_message.voice:
+                await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+                voice_transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
+                answer = TextDavinciClient.ask_question(api_key, voice_transcription)
+                await update.effective_message.reply_text(answer)
+
+            elif chat_state == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT and update.effective_message.voice:
+                await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+                voice_transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
+                chat_gpt_client = context.chat_data[constants.CHAT_CLIENT]
+                response = chat_gpt_client.ask_chat(voice_transcription)
+                await update.effective_message.reply_text(response)
 
             # Remove temporary files
             os.remove(media_filename)
+        
         else:
             await update.effective_message.reply_text(constants.TRANSCRIPT_MEDIA_HELP)
 
@@ -249,11 +266,9 @@ class ChatGPTBot:
         if chat_state == ChatState.MAIN:
             if self._openai_api_key_provided(user_id, context):
                 await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
-                await self._hide_menu(update)
                 api_key = self._get_openai_api_key(user_id, context)
                 answer = TextDavinciClient.ask_question(api_key, message)
                 await update.effective_message.reply_text(answer)
-                await self._show_menu(update, constants.MAIN_BUTTONS)
             else:
                 await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
                 await self._show_menu(update, constants.SET_API_KEY_BUTTON)
