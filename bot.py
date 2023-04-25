@@ -14,7 +14,7 @@ import constants
 from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient, TextDavinciClient
 from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData, ImageSize
 from OpenAIClients.WhisperClient.whisper_client import WhisperClient
-from Database.user_db_service import UserDatabaseService
+from OpenAIClients.DBService.db_service import ApiKeysDatabaseService
 from chat_state import ChatState
 from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup, InputMediaPhoto
 from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler
@@ -24,7 +24,7 @@ class ChatGPTBot:
         db_encryption_key = os.getenv(constants.TELEGRAM_BOT_DB_ENCRYPTION_KEY_ENV)
         if not db_encryption_key:
             logger.error("TELEGRAM_BOT_DB_ENCRYPTION_KEY_ENV was not found in environment variables")
-        self._db_service = UserDatabaseService(db_encryption_key)
+        self._db_service = ApiKeysDatabaseService(db_encryption_key, "api_keys.db")
         self._application = ApplicationBuilder().token(token).build()
         self._configure_handlers()
 
