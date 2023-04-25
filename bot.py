@@ -179,7 +179,7 @@ class ChatGPTBot:
             description, count = context.chat_data[constants.IMAGES_DESCRIPTION_KEY], context.chat_data[constants.IMAGES_COUNT_KEY]
             images_data = ImageRequestData(description, count, ImageSize[size.upper()])
 
-            await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
+            please_wait_message = await update.effective_message.reply_text(constants.IMAGE_GENERATION_IN_PROGRESS_MESSAGE)
             await self._hide_menu(update)
             image_urls = DALLEClient.generate_images(api_key, images_data)
             if image_urls:
@@ -190,6 +190,7 @@ class ChatGPTBot:
             else:
                 await update.effective_message.reply_text(constants.SOMETHING_WENT_WRONG_MESSAGE)
                 await self._show_menu(update, constants.IMAGE_SIZE_BUTTONS + constants.CANCEL_BUTTON)
+            please_wait_message.delete()
         else:
             await self._message_handler(update, context)
 
@@ -238,23 +239,23 @@ class ChatGPTBot:
             api_key = self._get_openai_api_key(user_id, context)
 
             if chat_state == ChatState.PROVIDING_MEDIA_FILE:
-                await update.effective_message.reply_text(constants.TRANSCRIPTION_IN_PROGRESS_MESSAGE)
-                transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
+                please_wait_message = await update.effective_message.reply_text(constants.TRANSCRIPTION_IN_PROGRESS_MESSAGE)
+            elif update.effective_message.voice and chat_state in [ChatState.MAIN, ChatState.HAVING_CONVERSATION_WITH_ASSISTANT]:
+                please_wait_message = await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+
+            transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
+            if chat_state == ChatState.PROVIDING_MEDIA_FILE:
                 await update.effective_message.reply_text(transcription)
-                self._show_menu(update, constants.MAIN_BUTTONS)
-
+                await self._show_menu(update, constants.MAIN_BUTTONS)
             elif chat_state == ChatState.MAIN and update.effective_message.voice:
-                await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
-                voice_transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
-                answer = TextDavinciClient.ask_question(api_key, voice_transcription)
+                answer = TextDavinciClient.ask_question(api_key, transcription)
                 await update.effective_message.reply_text(answer)
-
             elif chat_state == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT and update.effective_message.voice:
-                await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
-                voice_transcription = WhisperClient.transcript_media_file(api_key, f"{media_filename}")
                 chat_gpt_client = context.chat_data[constants.CHAT_CLIENT]
-                response = chat_gpt_client.ask_chat(voice_transcription)
+                response = chat_gpt_client.ask_chat(transcription)
                 await update.effective_message.reply_text(response)
+
+            await please_wait_message.delete()
 
             # Remove temporary files
             os.remove(media_filename)
@@ -270,10 +271,11 @@ class ChatGPTBot:
         chat_state = self._get_chat_state(context)
         if chat_state == ChatState.MAIN:
             if self._openai_api_key_provided(user_id, context):
-                await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+                please_wait_message = await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
                 api_key = self._get_openai_api_key(user_id, context)
                 answer = TextDavinciClient.ask_question(api_key, message)
                 await update.effective_message.reply_text(answer)
+                please_wait_message.delete()
             else:
                 await update.message.reply_text(constants.API_KEY_REQUEST_MESSAGE)
                 await self._show_menu(update, constants.SET_API_KEY_BUTTON)
@@ -297,9 +299,10 @@ class ChatGPTBot:
 
         elif chat_state == ChatState.HAVING_CONVERSATION_WITH_ASSISTANT:
             chat_gpt_client = context.chat_data[constants.CHAT_CLIENT]
-            await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
+            please_wait_message = await update.effective_message.reply_text(constants.ASSISTANT_IS_ANSWERING_MESSAGE)
             response = chat_gpt_client.ask_chat(update.effective_message.text)
             await update.effective_message.reply_text(response)
+            please_wait_message.delete()
 
         else:
             await update.effective_message.reply_text(constants.BOT_MENU_HELP_MESSAGE)
