@@ -11,19 +11,22 @@ logger = logging.getLogger(__name__)
 
 import os
 import constants
+
 from OpenAIClients.ChatGPT.chat_gpt_client import ChatGPTClient, TextDavinciClient
 from OpenAIClients.DALLE.dalle_client import DALLEClient, ImageRequestData, ImageSize
 from OpenAIClients.WhisperClient.whisper_client import WhisperClient
-from OpenAIClients.DBService.db_service import ApiKeysDatabaseService
+
+from DBService.db_service import ApiKeysDatabaseService
 from chat_state import ChatState
+
 from telegram import ReplyKeyboardRemove, Update, ReplyKeyboardMarkup, InputMediaPhoto
 from telegram.ext import filters, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler
 
 class ChatGPTBot:
     def __init__(self, token):
-        db_encryption_key = os.getenv(constants.TELEGRAM_BOT_DB_ENCRYPTION_KEY_ENV)
+        db_encryption_key = os.getenv(constants.API_KEYS_DB_ENCRYPTION_KEY_ENV)
         if not db_encryption_key:
-            logger.error("TELEGRAM_BOT_DB_ENCRYPTION_KEY_ENV was not found in environment variables")
+            logger.error(f"{constants.API_KEYS_DB_ENCRYPTION_KEY_ENV} was not found in environment variables.")
         self._db_service = ApiKeysDatabaseService(db_encryption_key, "api_keys.db")
         self._application = ApplicationBuilder().token(token).build()
         self._configure_handlers()
@@ -323,7 +326,7 @@ class ChatGPTBot:
 def main():
     bot_token = os.getenv(constants.TELEGRAM_BOT_TOKEN_ENV)
     if not bot_token:
-        logger.error("TELEGRAM_BOT_TOKEN_ENV was not found in environment variables")
+        logger.error(f"{constants.TELEGRAM_BOT_TOKEN_ENV} was not found in environment variables. Stopping the bot.")
         return
     bot = ChatGPTBot(bot_token)
     bot.run()
